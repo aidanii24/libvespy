@@ -1,0 +1,17 @@
+[project]
+name = "libvespy"
+version = "0.0.1"
+authors = [{ name="aidanii", email="aidanii_real@proton.me" }]
+description = "Python implementation of various tools for handling most file formats used in Tales of Vesperia."
+readme = "README.md"
+requires-python = ">=3.13"
+license = "MIT"
+license-files = ["LICENSE*"]
+
+[build-system]
+requires = ["setuptools >= 80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[tools.setuptools.packages.find]
+where = ["src"]
+exclude = ["/tests*"]

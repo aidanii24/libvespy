@@ -1,0 +1,10 @@
+# Development
+.idea/
+
+# Cache/Binaries
+__pycache__/
+
+# Artifacts
+tests/artifacts/
+dist/
+*.egg-info
