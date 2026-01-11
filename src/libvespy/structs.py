@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Literal
 import ctypes
 import math
@@ -32,6 +33,36 @@ class FPS4ContentData:
         self.has_mask_0x100 = value & 0x0100 == 0x0100
         self.has_unknown_types = value & 0xFE00 != 0
 
+    def get_entry_size(self) -> int:
+        size: int = 0
+
+        if self.has_start_pointers: size += 0x4
+        if self.has_sector_sizes: size += 0x4
+        if self.has_file_sizes: size += 0x4
+        if self.has_filenames: size += 0x20
+        if self.has_file_extensions: size += 0x8
+        if self.has_file_types: size += 0x4
+        if self.has_file_metadata: size += 0x4
+        if self.has_mask_080: size += 0x4
+        if self.has_mask_0x100: size += 0x4
+
+        return size
+
+    def get_metadata_offset(self) -> int:
+        size: int = 0
+
+        if self.has_file_metadata: return size
+
+        if self.has_start_pointers: size += 0x4
+        if self.has_sector_sizes: size += 0x4
+        if self.has_file_sizes: size += 0x4
+        if self.has_filenames: size += 0x20
+        if self.has_file_extensions: size += 0x8
+        if self.has_file_types: size += 0x4
+
+        return size
+
+@dataclass
 class FPS4FileData:
     index: int = None
     address: int = None
@@ -72,13 +103,13 @@ class FPS4FileData:
             path_location: int = int.from_bytes(mm.read(4), byteorder)
             if path_location != 0:
                 raw: str = read_null_terminated_string(mm, encoding, path_location)
-                metadata: list[tuple] = []
+                self.metadata: list[tuple] = []
                 for md in [d for d in raw.split(' ') if d]:
                     if "=" in md:
                         pair: tuple = tuple(md.split('=', 1))
-                        metadata.append(pair)
+                        self.metadata.append(pair)
                     else:
-                        metadata.append(tuple([None, md]))
+                        self.metadata.append(tuple([None, md]))
 
         if data.has_mask_0x080:
             self.unknown_0x080 = int.from_bytes(mm.read(4), byteorder)
@@ -161,13 +192,13 @@ class FPS4(ctypes.Union):
         ("big", FPS4BigEndian),
     ]
 
+    file_size: int = -1
     byteorder: Literal['little', 'big']
     data: FPS4LittleEndian | FPS4BigEndian
     content_data: FPS4ContentData
-    archive_name: str = None
+    archive_name: str | None = None
     file_location_multiplier: int
     should_guess_file_size: bool = False
-    file_size: int = -1
 
     files: list[FPS4FileData] = []
 
@@ -214,7 +245,7 @@ class FPS4(ctypes.Union):
 
     def generate_base_manifest(self) -> dict:
         manifest = {
-            'content_data': self.data.content_bitmask,
+            'content_bitmask': self.data.content_bitmask,
             'unknown0': self.data.unknown0,
             'file_location_multiplier': self.file_location_multiplier,
             'byteorder': self.byteorder,
@@ -228,6 +259,27 @@ class FPS4(ctypes.Union):
             manifest["comment"] = self.archive_name
 
         return manifest
+
+    @staticmethod
+    def from_manifest(manifest_data: dict) -> 'FPS4':
+        fps4: FPS4 = FPS4()
+
+        fps4.little.content_bitmask = manifest_data['content_bitmask']
+        fps4.set_byteorder(manifest_data['byteorder'])
+
+        fps4.data.magic = "FPS4"
+        fps4.data.file_entries = len(manifest_data['files'])
+        fps4.data.header_size = ctypes.sizeof(fps4.data)
+        fps4.data.unknown0 = manifest_data['unknown0']
+
+        fps4.archive_name = manifest_data.get('archive_name', None)
+        fps4.file_location_multiplier = manifest_data['file_location_multiplier']
+
+        entry_size: int = fps4.content_data.get_entry_size()
+        fps4.data.entry_size = entry_size
+
+        return fps4
+
 
     def validate(self):
         assert self.magic == b"FPS4", "Loaded file is not a valid FPS4 File!"

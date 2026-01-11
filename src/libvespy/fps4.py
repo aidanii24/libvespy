@@ -5,7 +5,7 @@ import mmap
 import sys
 import os
 
-from libvespy.utils import read_null_terminated_string, get_alignment_from_lowest_unset_bit
+from libvespy import utils
 from libvespy.structs import FPS4FileData, FPS4
 
 
@@ -40,7 +40,7 @@ def extract(filename: str, out_dir: str, manifest_dir: str = "",
 
         # Get other data
         mm.seek(fps4.data.archive_name_address)
-        fps4.archive_name = read_null_terminated_string(mm, 'shift-jis', reset_position=False)
+        fps4.archive_name = utils.read_null_terminated_string(mm, 'shift-jis', reset_position=False)
         fps4.file_size = mm.size()
 
         # Get Files in Archive
@@ -61,58 +61,58 @@ def extract(filename: str, out_dir: str, manifest_dir: str = "",
 
         # Extract
         for file in fps4.files:
-            if file.skippable: continue
-
             file_size: int | None = file.estimate_file_size(fps4.files)
-            assert file.address, "FPS4 Extraction Error: File does not contain file entry start pointer."
-            assert file_size is not None, "FPS4 Extraction Error: File does not contain file size data."
 
             has_valid_file = True
             file_manifest: dict = {k: v for k, v in file.__dict__.items() if v is not None}
 
-            file_address: int = file.address * fps4.file_location_multiplier
-            first_file_position = min(first_file_position, file_address)
-            estimated_alignment = estimated_alignment & ~file_address
-            path, filename = file.estimate_file_path(ignore_metadata)
+            if not file.skippable:
+                assert file.address, "FPS4 Extraction Error: File does not contain file entry start pointer."
+                assert file_size is not None, "FPS4 Extraction Error: File does not contain file size data."
 
-            base_out_dir: str = out_dir
+                file_address: int = file.address * fps4.file_location_multiplier
+                first_file_position = min(first_file_position, file_address)
+                estimated_alignment = estimated_alignment & ~file_address
+                path, filename = file.estimate_file_path(ignore_metadata)
 
-            if path is not None:
-                base_out_dir = os.path.join(base_out_dir, path)
-                if not os.path.isdir(base_out_dir):
-                    os.makedirs(base_out_dir)
-            else:
-                base_out_dir = filename
+                base_out_dir: str = out_dir
 
-            full_out_dir: str = os.path.join(out_dir, base_out_dir)
-            file_manifest['path_on_disk'] = os.path.abspath(full_out_dir) if absolute_paths else full_out_dir
+                if path is not None:
+                    base_out_dir = os.path.join(base_out_dir, path)
+                    if not os.path.isdir(base_out_dir):
+                        os.makedirs(base_out_dir)
+                else:
+                    base_out_dir = filename
 
-            mm.seek(file_address)
-            contents: bytes = mm.read(file_size)
+                full_out_dir: str = os.path.join(out_dir, base_out_dir)
+                file_manifest['path_on_disk'] = os.path.abspath(full_out_dir) if absolute_paths else full_out_dir
 
-            if not os.path.isdir(os.path.dirname(full_out_dir)):
-                os.makedirs(os.path.dirname(full_out_dir))
+                mm.seek(file_address)
+                contents: bytes = mm.read(file_size)
 
-            with open(full_out_dir, "w+b") as af:
-                af.truncate(len(contents))
-                mf = mmap.mmap(af.fileno(), 0, prot=mmap.PROT_WRITE)
+                if not os.path.isdir(os.path.dirname(full_out_dir)):
+                    os.makedirs(os.path.dirname(full_out_dir))
 
-                mf.resize(len(contents))
-                mf.write(contents)
+                with open(full_out_dir, "w+b") as af:
+                    af.truncate(len(contents))
+                    mf = mmap.mmap(af.fileno(), 0, prot=mmap.PROT_WRITE)
 
-                mf.flush()
-                mf.close()
+                    mf.resize(len(contents))
+                    mf.write(contents)
+
+                    mf.flush()
+                    mf.close()
 
             manifest.setdefault('files', []).append(file_manifest)
 
         mm.close()
 
     # More Metadata
-    alignment: int = get_alignment_from_lowest_unset_bit(estimated_alignment)
+    alignment: int = utils.get_alignment_from_lowest_unset_bit(estimated_alignment)
     manifest['alignment'] = alignment
 
     if first_file_position != 0xffffffffffffffff:
-        first_file_alignment: int = get_alignment_from_lowest_unset_bit(~first_file_position)
+        first_file_alignment: int = utils.get_alignment_from_lowest_unset_bit(~first_file_position)
         if first_file_alignment > alignment:
             manifest['first_file_alignment'] = first_file_alignment
 
@@ -129,11 +129,146 @@ def extract(filename: str, out_dir: str, manifest_dir: str = "",
             f.close()
 
 
-def pack(archive_dir: str = "", manifest: str = ""):
-    if not archive_dir and not manifest:
-        print("Provide either an archive directory to pack, or a manifest file!")
+def pack_from_manifest(output_name: str, manifest: str):
+    if not manifest:
+        print("A manifest file must be provided!")
         sys.exit(1)
 
-    if not os.path.isdir(archive_dir) and not os.path.isdir(manifest):
-        print("The provided path is not valid!")
+    if not os.path.isdir(manifest):
+        print("The provided path to the manifest is not valid!")
         sys.exit(1)
+
+    mf_data: dict = json.load(open(manifest))
+    fps4 = FPS4.from_manifest(mf_data)
+
+    metadata_offset: int = fps4.content_data.get_metadata_offset()
+    alignment = 1 if not mf_data['alignment'] else mf_data['alignment']
+    is_sector_and_file_size_same: bool = mf_data['set_sector_size_as_file_size']
+    file_terminator_address: int = mf_data['file_terminator_address']
+
+    with open(output_name, "w+b") as f:
+        mm = mmap.mmap(f.fileno(), 0, prot=mmap.PROT_WRITE)
+
+        # Skip Header for now
+        mm.seek(ctypes.sizeof(fps4))
+
+        for file_data in mf_data['files']:
+            # Place filler for Start Pointer/Sector Size data for now
+            if fps4.content_data.has_start_pointers: mm.write(bytes(4))
+            if fps4.content_data.has_sector_sizes: mm.write(bytes(4))
+
+            if fps4.content_data.has_file_sizes:
+                mm.write(int.to_bytes(file_data.get('file_size'), length=4, byteorder=fps4.byteorder))
+            if fps4.content_data.has_filenames:
+                filename: str = file_data.get('filename', '')
+                if len(filename) > 0x1F:
+                    filename = filename[:0x1F]
+
+                as_bytes: bytes = filename.encode('shift-jis')
+
+                mm.write(as_bytes)
+                mm.write(bytes(0x20 - len(as_bytes)))   # Padding
+            if fps4.content_data.has_file_extensions:
+                extension: str = file_data.get('file_extension', '')
+                if not extension and "." in file_data.get('filename', ''):
+                    extension = file_data['filename'].split('.')[-1]
+                if len(extension) > 0x8:
+                    extension = extension[:0x8]
+
+                as_bytes: bytes = extension.encode('shift-jis')
+
+                mm.write(as_bytes)
+                mm.write(bytes(0x8 - len(as_bytes)))    # Padding
+            if fps4.content_data.has_file_types:
+                extension: str = file_data.get('file_extension', '')
+                if not extension and "." in file_data.get('filename', ''):
+                    extension = file_data['filename'].split('.')[-1]
+                if len(extension) > 0x4:
+                    extension = extension[:0x4]
+
+                as_bytes: bytes = extension.encode('shift-jis')
+
+                mm.write(as_bytes)
+                mm.write(bytes(0x4 - len(as_bytes)))  # Padding
+
+            # Place filler for Metadata for now
+            if fps4.content_data.has_file_metadata: mm.write(int(0).to_bytes(4))
+
+            if fps4.content_data.has_mask_0x080: mm.write(int(0).to_bytes(4))
+            if fps4.content_data.has_mask_0x100: mm.write(int(0).to_bytes(4))
+
+        # Reserve space for final entry pointing to end of container
+        mm.write(bytes(fps4.data.entry_size))
+
+        # Handle Metadata
+        if fps4.content_data.has_file_metadata:
+            for i, file in enumerate(file_data['files']):
+                metadata = file.get('metadata', 0)
+                if metadata > 0:
+                    pointer: int = 0x1C + (i * fps4.data.entry_size + metadata_offset)
+
+                # Write Pointer
+                cur_pos: int = mm.tell()
+                mm.seek(pointer)
+                mm.write(cur_pos.to_bytes(4, byteorder=fps4.byteorder))
+                mm.seek(cur_pos)
+
+                # Write Metadata
+                for kv in file['metadata']:
+                    if kv[0] is None:
+                        mm.write(kv[1].encode('shift-jis'))
+                    else:
+                        mm.write(f"{kv[0]}={kv[1]}".encode('shift-jis'))
+
+                    mm.write(0x20.to_bytes(1, byteorder=fps4.byteorder))
+
+                mm.seek(1, 1)
+                mm.write(bytes(1))
+
+        # Handle Archive Name
+        if fps4.archive_name is not None:
+            fps4.data.archive_name_address = mm.tell()
+
+            as_bytes = fps4.archive_name.encode('shift-jis')
+            mm.write(as_bytes)
+            mm.write(bytes(1))
+
+        # Resolve File Pointers
+        last_pos: int = mm.tell()
+
+        ## Handle File Start
+        fps4.data.file_start = utils.align_number(mm.tell(), alignment)
+
+        ## Handle Starting Addresses of Files
+        start_pointer: int = fps4.data.file_start
+        start_addresses: list[int] = []
+        for file_data in file_data['files']:
+            start_addresses.append(start_pointer)
+            start_pointer += utils.align_number(file_data['file_size'], alignment)
+
+        ## Handle Start Pointers and Sector Sizes
+        for i, file_data in enumerate(file_data['files']):
+            mm.seek(0x1C + (i * fps4.data.entry_size))
+            if fps4.content_data.has_start_pointers:
+                mm.write(0xffffffff.to_bytes(4, byteorder=fps4.byteorder))
+            if fps4.content_data.has_sector_sizes:
+                mm.write(bytes(4))
+
+        # Handle Final Entry
+        mm.seek(0x1C + (len(file_data['files']) * fps4.data.entry_size))
+        if file_terminator_address is None:
+            mm.write(int(start_pointer / fps4.file_location_multiplier).to_bytes(4, byteorder=fps4.byteorder))
+        else:
+            mm.write(file_terminator_address.to_bytes(4, byteorder=fps4.byteorder))
+
+        # Pad until Files address
+        mm.seek(last_pos)
+        mm.write(bytes(fps4.data.file_start - mm.size()))
+
+        # Write Files into archive
+        for file_data in file_data['files']:
+            assert os.path.isfile(file_data['path_on_disk'])
+            mm.write(open(file_data['path_on_disk'], 'rb').read())
+
+            if alignment > 1:
+                mm.write(bytes(utils.align_number(mm.size(), alignment) - mm.size()))

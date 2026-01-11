@@ -1,3 +1,5 @@
+import struct
+
 import mmap
 
 
@@ -29,3 +31,8 @@ def get_alignment_from_lowest_unset_bit(alignment: int) -> int:
         b += 1
 
     return bits
+
+def align_number(base: int, alignment: int, offset: int = 0) -> int:
+    diff: int = (base - offset) % alignment
+
+    return diff if diff == 0 else base + (alignment - diff)
