@@ -272,3 +272,11 @@ def pack_from_manifest(output_name: str, manifest: str):
 
             if alignment > 1:
                 mm.write(bytes(utils.align_number(mm.size(), alignment) - mm.size()))
+
+        # Write Header
+        mm.seek(0)
+        mm.write(bytearray(fps4.data))
+
+        mm.flush()
+        mm.close()
+        f.close()
