@@ -17,7 +17,6 @@ def extract(filename: str, out_dir: str, manifest_dir: str = "",
 
     byteorder: Literal['little', 'big'] = sys.byteorder
 
-    fps4: FPS4
     manifest: dict = {}
 
     with open(filename, "rb") as f:
@@ -73,7 +72,7 @@ def extract(filename: str, out_dir: str, manifest_dir: str = "",
                 file_address: int = file.address * fps4.file_location_multiplier
                 first_file_position = min(first_file_position, file_address)
                 estimated_alignment = estimated_alignment & ~file_address
-                path, filename = file.estimate_file_path(ignore_metadata)
+                path, archived_filename = file.estimate_file_path(ignore_metadata)
 
                 base_out_dir: str = out_dir
 
@@ -82,7 +81,7 @@ def extract(filename: str, out_dir: str, manifest_dir: str = "",
                     if not os.path.isdir(base_out_dir):
                         os.makedirs(base_out_dir)
                 else:
-                    base_out_dir = filename
+                    base_out_dir = archived_filename
 
                 full_out_dir: str = os.path.join(out_dir, base_out_dir)
                 file_manifest['path_on_disk'] = os.path.abspath(full_out_dir) if absolute_paths else full_out_dir
@@ -102,10 +101,12 @@ def extract(filename: str, out_dir: str, manifest_dir: str = "",
 
                     mf.flush()
                     mf.close()
+                    af.close()
 
             manifest.setdefault('files', []).append(file_manifest)
 
         mm.close()
+        f.close()
 
     # More Metadata
     alignment: int = utils.get_alignment_from_lowest_unset_bit(estimated_alignment)
@@ -127,7 +128,6 @@ def extract(filename: str, out_dir: str, manifest_dir: str = "",
 
             f.flush()
             f.close()
-
 
 def pack_from_manifest(output_name: str, manifest: str):
     if not manifest:

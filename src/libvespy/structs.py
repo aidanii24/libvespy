@@ -91,7 +91,7 @@ class FPS4FileData:
             self.file_size = int.from_bytes(mm.read(4), byteorder)
 
         if data.has_filenames:
-            self.filename = mm.read(0x20).decode(encoding)
+            self.filename = mm.read(0x20).decode(encoding).rstrip('\x00')
 
         if data.has_file_extensions:
             self.file_extension = mm.read(0x8).decode(encoding)
@@ -207,6 +207,8 @@ class FPS4(ctypes.Union):
         self.data = self.little if byteorder == 'little' else self.big
 
         self.content_data = FPS4ContentData(self.data.content_bitmask)
+
+        self.files = []
 
     def finalize(self):
         self.file_location_multiplier = self.calculate_file_multiplier()

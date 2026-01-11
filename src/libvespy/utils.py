@@ -1,5 +1,3 @@
-import struct
-
 import mmap
 
 
