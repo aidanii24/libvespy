@@ -212,10 +212,11 @@ def pack_from_manifest(output_name: str, manifest: str):
 
         # Handle Metadata
         if fps4.content_data.has_file_metadata:
-            for i, file in enumerate(file_data['files']):
-                metadata = file.get('metadata', 0)
-                if metadata > 0:
-                    pointer: int = 0x1C + (i * fps4.data.entry_size + metadata_offset)
+            for i, file in enumerate(mf_data['files']):
+                metadata = file.get('metadata', None)
+                if metadata is None or len(metadata) < 0: continue
+
+                pointer: int = 0x1C + (i * fps4.data.entry_size + metadata_offset)
 
                 # Write Pointer
                 cur_pos: int = mm.tell()
@@ -258,6 +259,7 @@ def pack_from_manifest(output_name: str, manifest: str):
 
         ## Handle Start Pointers and Sector Sizes
         for i, file_data in enumerate(mf_data['files']):
+            mm.seek(0x1C + (fps4.data.entry_size * i))
             utils.expand_and_seek(mm, 0x1C + (i * fps4.data.entry_size))
             if fps4.content_data.has_start_pointers:
                 utils.expand_and_write(mm, 0xffffffff.to_bytes(4, byteorder=fps4.byteorder))

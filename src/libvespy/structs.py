@@ -266,8 +266,9 @@ class FPS4(ctypes.Union):
     def from_manifest(manifest_data: dict) -> 'FPS4':
         fps4: FPS4 = FPS4()
 
-        fps4.little.content_bitmask = manifest_data['content_bitmask']
         fps4.set_byteorder(manifest_data['byteorder'])
+        fps4.data.content_bitmask = manifest_data['content_bitmask']
+        fps4.content_data = FPS4ContentData(manifest_data['content_bitmask'])
 
         fps4.data.magic = "FPS4".encode("ascii")
         fps4.data.file_entries = len(manifest_data['files'])
@@ -277,8 +278,7 @@ class FPS4(ctypes.Union):
         fps4.archive_name = manifest_data.get('archive_name', None)
         fps4.file_location_multiplier = manifest_data['file_location_multiplier']
 
-        entry_size: int = fps4.content_data.get_entry_size()
-        fps4.data.entry_size = entry_size
+        fps4.data.entry_size = fps4.content_data.get_entry_size()
 
         return fps4
 
