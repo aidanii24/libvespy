@@ -269,7 +269,7 @@ class FPS4(ctypes.Union):
         fps4.little.content_bitmask = manifest_data['content_bitmask']
         fps4.set_byteorder(manifest_data['byteorder'])
 
-        fps4.data.magic = "FPS4"
+        fps4.data.magic = "FPS4".encode("ascii")
         fps4.data.file_entries = len(manifest_data['files'])
         fps4.data.header_size = ctypes.sizeof(fps4.data)
         fps4.data.unknown0 = manifest_data['unknown0']

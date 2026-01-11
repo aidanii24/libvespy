@@ -8,14 +8,6 @@ from libvespy import fps4
 
 
 class TestFPS4(unittest.TestCase):
-    def tearDown(self):
-        contents: list[str] = os.listdir(paths.ARTIFACTS_DIR)
-        for f in contents:
-            if os.path.isfile(os.path.join(paths.ARTIFACTS_DIR, f)):
-                os.remove(os.path.join(paths.ARTIFACTS_DIR, f))
-            elif os.path.isdir(os.path.join(paths.ARTIFACTS_DIR, f)):
-                shutil.rmtree(os.path.join(paths.ARTIFACTS_DIR, f))
-
     def test_extract_btl(self):
         """FPS4 Extraction Test: btl.svo"""
         target = os.path.join(paths.CONTROL_DIR, 'btl.svo')
@@ -42,6 +34,8 @@ class TestFPS4(unittest.TestCase):
                 file_hash = hashlib.sha256(f.read()).hexdigest()
                 self.assertEqual(file_hash, control_checksums[file])
 
+                f.close()
+
     def test_extract_btl_pack(self):
         """FPS4 Extraction Test: BTL_PACK.DAT"""
         target = os.path.join(paths.CONTROL_DIR, "BTL_PACK.DAT")
@@ -55,5 +49,24 @@ class TestFPS4(unittest.TestCase):
         output_count: int = len(os.listdir(out_dir))
         self.assertEqual(output_count, 24)
 
+    def test_pack_btl_pack(self):
+        """FPS4 Pack Test: BTL_PACK.DAT"""
+        manifest = os.path.join(paths.ARTIFACTS_DIR, ".manifest", "BTL_PACK.json")
+        assert os.path.isfile(manifest)
+
+        output = os.path.join(paths.ARTIFACTS_DIR, "btl_pack.pck", "BTL_PACK.DAT")
+
+        fps4.pack_from_manifest(output, manifest)
+
+        self.assertIs(os.path.isfile(output), True)
+
 if __name__ == '__main__':
+    # Create clean artifact folder
+    contents: list[str] = os.listdir(paths.ARTIFACTS_DIR)
+    for content in contents:
+        if os.path.isfile(os.path.join(paths.ARTIFACTS_DIR, content)):
+            os.remove(os.path.join(paths.ARTIFACTS_DIR, content))
+        elif os.path.isdir(os.path.join(paths.ARTIFACTS_DIR, content)):
+            shutil.rmtree(os.path.join(paths.ARTIFACTS_DIR, content))
+
     unittest.main(verbosity=2)

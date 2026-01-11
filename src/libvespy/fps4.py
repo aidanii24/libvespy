@@ -134,19 +134,29 @@ def pack_from_manifest(output_name: str, manifest: str):
         print("A manifest file must be provided!")
         sys.exit(1)
 
-    if not os.path.isdir(manifest):
+    if not os.path.isfile(manifest):
         print("The provided path to the manifest is not valid!")
         sys.exit(1)
 
-    mf_data: dict = json.load(open(manifest))
+    mf_data: dict = {}
+    with open(manifest) as f:
+        mf_data = json.load(f)
+        f.close()
+
     fps4 = FPS4.from_manifest(mf_data)
 
     metadata_offset: int = fps4.content_data.get_metadata_offset()
     alignment = 1 if not mf_data['alignment'] else mf_data['alignment']
-    is_sector_and_file_size_same: bool = mf_data['set_sector_size_as_file_size']
+    # is_sector_and_file_size_same: bool = mf_data['set_sector_size_as_file_size']
     file_terminator_address: int = mf_data['file_terminator_address']
 
+    if not os.path.isdir(os.path.dirname(output_name)):
+        os.makedirs(os.path.dirname(output_name))
+
     with open(output_name, "w+b") as f:
+        # Set initial size
+        if os.path.getsize(output_name) < 1: f.truncate(0x1C)
+
         mm = mmap.mmap(f.fileno(), 0, prot=mmap.PROT_WRITE)
 
         # Skip Header for now
@@ -154,11 +164,11 @@ def pack_from_manifest(output_name: str, manifest: str):
 
         for file_data in mf_data['files']:
             # Place filler for Start Pointer/Sector Size data for now
-            if fps4.content_data.has_start_pointers: mm.write(bytes(4))
-            if fps4.content_data.has_sector_sizes: mm.write(bytes(4))
+            if fps4.content_data.has_start_pointers: utils.expand_and_write(mm, bytes(4))
+            if fps4.content_data.has_sector_sizes: utils.expand_and_write(mm, bytes(4))
 
             if fps4.content_data.has_file_sizes:
-                mm.write(int.to_bytes(file_data.get('file_size'), length=4, byteorder=fps4.byteorder))
+                utils.expand_and_write(mm, int.to_bytes(file_data.get('file_size'), length=4, byteorder=fps4.byteorder))
             if fps4.content_data.has_filenames:
                 filename: str = file_data.get('filename', '')
                 if len(filename) > 0x1F:
@@ -166,8 +176,8 @@ def pack_from_manifest(output_name: str, manifest: str):
 
                 as_bytes: bytes = filename.encode('shift-jis')
 
-                mm.write(as_bytes)
-                mm.write(bytes(0x20 - len(as_bytes)))   # Padding
+                utils.expand_and_write(mm, as_bytes)
+                utils.expand_and_write(mm, bytes(0x20 - len(as_bytes)))     # Padding
             if fps4.content_data.has_file_extensions:
                 extension: str = file_data.get('file_extension', '')
                 if not extension and "." in file_data.get('filename', ''):
@@ -177,8 +187,8 @@ def pack_from_manifest(output_name: str, manifest: str):
 
                 as_bytes: bytes = extension.encode('shift-jis')
 
-                mm.write(as_bytes)
-                mm.write(bytes(0x8 - len(as_bytes)))    # Padding
+                utils.expand_and_write(mm, as_bytes)
+                utils.expand_and_write(mm, bytes(0x8 - len(as_bytes)))      # Padding
             if fps4.content_data.has_file_types:
                 extension: str = file_data.get('file_extension', '')
                 if not extension and "." in file_data.get('filename', ''):
@@ -188,17 +198,17 @@ def pack_from_manifest(output_name: str, manifest: str):
 
                 as_bytes: bytes = extension.encode('shift-jis')
 
-                mm.write(as_bytes)
-                mm.write(bytes(0x4 - len(as_bytes)))  # Padding
+                utils.expand_and_write(mm, as_bytes)
+                utils.expand_and_write(mm, bytes(0x4 - len(as_bytes)))     # Padding
 
             # Place filler for Metadata for now
-            if fps4.content_data.has_file_metadata: mm.write(int(0).to_bytes(4))
+            if fps4.content_data.has_file_metadata: utils.expand_and_write(mm, bytes(4))
 
-            if fps4.content_data.has_mask_0x080: mm.write(int(0).to_bytes(4))
-            if fps4.content_data.has_mask_0x100: mm.write(int(0).to_bytes(4))
+            if fps4.content_data.has_mask_0x080: utils.expand_and_write(mm, bytes(4))
+            if fps4.content_data.has_mask_0x100: utils.expand_and_write(mm, bytes(4))
 
         # Reserve space for final entry pointing to end of container
-        mm.write(bytes(fps4.data.entry_size))
+        utils.expand_and_write(mm, bytes(fps4.data.entry_size))
 
         # Handle Metadata
         if fps4.content_data.has_file_metadata:
@@ -209,20 +219,20 @@ def pack_from_manifest(output_name: str, manifest: str):
 
                 # Write Pointer
                 cur_pos: int = mm.tell()
-                mm.seek(pointer)
-                mm.write(cur_pos.to_bytes(4, byteorder=fps4.byteorder))
+                utils.expand_and_seek(mm, pointer)
+                utils.expand_and_write(mm, cur_pos.to_bytes(4, byteorder=fps4.byteorder))
                 mm.seek(cur_pos)
 
                 # Write Metadata
                 for kv in file['metadata']:
                     if kv[0] is None:
-                        mm.write(kv[1].encode('shift-jis'))
+                        utils.expand_and_write(mm, kv[1].encode('shift-jis'))
                     else:
-                        mm.write(f"{kv[0]}={kv[1]}".encode('shift-jis'))
+                        utils.expand_and_write(mm, f"{kv[0]}={kv[1]}".encode('shift-jis'))
 
-                    mm.write(0x20.to_bytes(1, byteorder=fps4.byteorder))
+                    utils.expand_and_write(mm, 0x20.to_bytes(1, byteorder=fps4.byteorder))
 
-                mm.seek(1, 1)
+                mm.seek(-1, 1)
                 mm.write(bytes(1))
 
         # Handle Archive Name
@@ -230,8 +240,8 @@ def pack_from_manifest(output_name: str, manifest: str):
             fps4.data.archive_name_address = mm.tell()
 
             as_bytes = fps4.archive_name.encode('shift-jis')
-            mm.write(as_bytes)
-            mm.write(bytes(1))
+            utils.expand_and_write(mm, as_bytes)
+            utils.expand_and_write(mm, bytes(1))
 
         # Resolve File Pointers
         last_pos: int = mm.tell()
@@ -242,36 +252,39 @@ def pack_from_manifest(output_name: str, manifest: str):
         ## Handle Starting Addresses of Files
         start_pointer: int = fps4.data.file_start
         start_addresses: list[int] = []
-        for file_data in file_data['files']:
+        for file_data in mf_data['files']:
             start_addresses.append(start_pointer)
             start_pointer += utils.align_number(file_data['file_size'], alignment)
 
         ## Handle Start Pointers and Sector Sizes
-        for i, file_data in enumerate(file_data['files']):
-            mm.seek(0x1C + (i * fps4.data.entry_size))
+        for i, file_data in enumerate(mf_data['files']):
+            utils.expand_and_seek(mm, 0x1C + (i * fps4.data.entry_size))
             if fps4.content_data.has_start_pointers:
-                mm.write(0xffffffff.to_bytes(4, byteorder=fps4.byteorder))
+                utils.expand_and_write(mm, 0xffffffff.to_bytes(4, byteorder=fps4.byteorder))
             if fps4.content_data.has_sector_sizes:
-                mm.write(bytes(4))
+                utils.expand_and_write(mm, bytes(4))
 
         # Handle Final Entry
-        mm.seek(0x1C + (len(file_data['files']) * fps4.data.entry_size))
+        mm.seek(0x1C + (len(mf_data['files']) * fps4.data.entry_size))
         if file_terminator_address is None:
-            mm.write(int(start_pointer / fps4.file_location_multiplier).to_bytes(4, byteorder=fps4.byteorder))
+            utils.expand_and_write(mm, int(start_pointer / fps4.file_location_multiplier).to_bytes(4, byteorder=fps4.byteorder))
         else:
-            mm.write(file_terminator_address.to_bytes(4, byteorder=fps4.byteorder))
+            utils.expand_and_write(mm, file_terminator_address.to_bytes(4, byteorder=fps4.byteorder))
 
         # Pad until Files address
         mm.seek(last_pos)
         mm.write(bytes(fps4.data.file_start - mm.size()))
 
         # Write Files into archive
-        for file_data in file_data['files']:
+        for file_data in mf_data['files']:
+            if file_data.get('skippable', False): continue
             assert os.path.isfile(file_data['path_on_disk'])
-            mm.write(open(file_data['path_on_disk'], 'rb').read())
+            with open(file_data['path_on_disk'], 'rb') as af:
+                utils.expand_and_write(mm, af.read())
+                f.close()
 
             if alignment > 1:
-                mm.write(bytes(utils.align_number(mm.size(), alignment) - mm.size()))
+                utils.expand_and_write(mm, bytes(utils.align_number(mm.size(), alignment) - mm.size()))
 
         # Write Header
         mm.seek(0)
