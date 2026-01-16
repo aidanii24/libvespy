@@ -64,9 +64,10 @@ if __name__ == '__main__':
     # Create clean artifact folder
     contents: list[str] = os.listdir(paths.ARTIFACTS_DIR)
     for content in contents:
-        if os.path.isfile(os.path.join(paths.ARTIFACTS_DIR, content)):
-            os.remove(os.path.join(paths.ARTIFACTS_DIR, content))
-        elif os.path.isdir(os.path.join(paths.ARTIFACTS_DIR, content)):
-            shutil.rmtree(os.path.join(paths.ARTIFACTS_DIR, content))
+        path: str = os.path.join(paths.ARTIFACTS_DIR, content)
+        if os.path.isfile(path):
+            os.remove(path)
+        elif os.path.isdir(path):
+            shutil.rmtree(path)
 
     unittest.main(verbosity=2)

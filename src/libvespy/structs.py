@@ -51,7 +51,7 @@ class FPS4ContentData:
     def get_metadata_offset(self) -> int:
         size: int = 0
 
-        if self.has_file_metadata: return size
+        if not self.has_file_metadata: return size
 
         if self.has_start_pointers: size += 0x4
         if self.has_sector_sizes: size += 0x4
