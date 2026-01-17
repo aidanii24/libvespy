@@ -254,7 +254,6 @@ class FPS4(ctypes.Union):
             'file_terminator_address': (self.files[-1].address
                                         if len(self.files) > 0 and self.files[-1].address != self.file_size
                                         else -1),
-            'files': []
         }
 
         if self.archive_name is not None:

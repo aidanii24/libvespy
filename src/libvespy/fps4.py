@@ -59,6 +59,7 @@ def extract(filename: str, out_dir: str, manifest_dir: str = "",
         has_valid_file: bool = False
 
         # Extract
+        file_data: list[dict] = []
         for file in fps4.files:
             file_size: int | None = file.estimate_file_size(fps4.files)
 
@@ -103,7 +104,7 @@ def extract(filename: str, out_dir: str, manifest_dir: str = "",
                     mf.close()
                     af.close()
 
-            manifest.setdefault('files', []).append(file_manifest)
+            file_data.append(file_manifest)
 
         mm.close()
         f.close()
@@ -112,12 +113,15 @@ def extract(filename: str, out_dir: str, manifest_dir: str = "",
     alignment: int = utils.get_alignment_from_lowest_unset_bit(estimated_alignment)
     manifest['alignment'] = alignment
 
+    manifest['first_file_alignment'] = None
     if first_file_position != 0xffffffffffffffff:
         first_file_alignment: int = utils.get_alignment_from_lowest_unset_bit(~first_file_position)
         if first_file_alignment > alignment:
             manifest['first_file_alignment'] = first_file_alignment
 
+
     manifest['set_sector_size_as_file_size'] = has_valid_file and is_sector_and_file_size_same
+    manifest['files'] = file_data
 
     # Generate Manifest
     if manifest_dir:
@@ -150,7 +154,8 @@ def pack_from_manifest(output_name: str, manifest: str):
     is_sector_and_file_size_same: bool = mf_data['set_sector_size_as_file_size']
     file_terminator_address: int = mf_data['file_terminator_address']
 
-    first_file_alignment: int = mf_data.get('first_file_alignment', alignment)
+    first_file_alignment: int = alignment if mf_data.get('first_file_alignment') is None \
+        else mf_data['first_file_alignment']
 
     if not os.path.isdir(os.path.dirname(output_name)):
         os.makedirs(os.path.dirname(output_name))
@@ -298,7 +303,7 @@ def pack_from_manifest(output_name: str, manifest: str):
 
         # Pad until Files address
         mm.seek(last_pos)
-        mm.write(bytes(fps4.data.file_start - mm.size()))
+        utils.expand_and_write(mm, bytes(fps4.data.file_start - mm.size()))
 
         # Write Files into archive
         for file_data in mf_data['files']:

@@ -41,9 +41,9 @@ def get_alignment_from_lowest_unset_bit(alignment: int) -> int:
         if alignment & (1 << b) == 0:
             break
 
-        b += 1
+        bits += 1
 
-    return bits
+    return 1 << bits
 
 def align_number(base: int, alignment: int, offset: int = 0) -> int:
     diff: int = (base - offset) % alignment
