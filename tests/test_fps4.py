@@ -23,7 +23,6 @@ class TestFPS4(unittest.TestCase):
         """Display current Test Case"""
         print(self._testMethodDoc)
 
-    @unittest.skip("skipping this test")
     def test_extract_btl(self):
         """FPS4 Extraction Test: btl.svo"""
         target = os.path.join(paths.CONTROL_DIR, 'btl.svo')
@@ -54,7 +53,6 @@ class TestFPS4(unittest.TestCase):
 
             self.assertEqual(file_hash, control_checksums[file], msg=f"{file} does not match checksum")
 
-    @unittest.skip("skipping this test")
     def test_extract_btl_pack(self):
         """FPS4 Extraction Test: BTL_PACK.DAT"""
         target = os.path.join(paths.CONTROL_DIR, "BTL_PACK.DAT")
@@ -68,7 +66,6 @@ class TestFPS4(unittest.TestCase):
         output_count: int = len(os.listdir(out_dir))
         self.assertEqual(output_count, 24, msg='Expected 24 output files')
 
-    @unittest.skip("skipping this test")
     def test_extract_T8BTMA(self):
         """FPS4 Extraction Test: 0004"""
         target = os.path.join(paths.CONTROL_DIR, "0004")
@@ -90,7 +87,6 @@ class TestFPS4(unittest.TestCase):
 
         self.assertEqual(file_hash, checksum, msg=f"{out_dir} does not match checksum")
 
-    @unittest.skip("skipping this test")
     def test_extract_item(self):
         """FPS4 Extraction Test: item.svo"""
         target = os.path.join(paths.CONTROL_DIR, "item.svo")
@@ -120,7 +116,6 @@ class TestFPS4(unittest.TestCase):
 
             self.assertEqual(file_hash, control_checksums[file], msg=f"{file} does not match checksum")
 
-    @unittest.skip("skipping this test")
     def test_extract_npc(self):
         """FPS4 Extraction Test: npc.svo"""
         target = os.path.join(paths.CONTROL_DIR, "npc.svo")
@@ -155,7 +150,6 @@ class TestFPS4(unittest.TestCase):
 
         self.assertEqual(file_hash, checksum, msg=f"{out_dir} does not match checksum")
 
-    @unittest.skip("skipping this test")
     def test_pack_T8BTMA(self):
         """FPS4 Pack Test: 0004 (BTL_PACK.DAT)"""
         manifest = os.path.join(paths.ARTIFACTS_DIR, ".manifest", "T8BTMA.json")
@@ -167,7 +161,6 @@ class TestFPS4(unittest.TestCase):
 
         self.assertIs(os.path.isfile(output), True, msg=f"{output} was failed to be created")
 
-    @unittest.skip("skipping this test")
     def test_pack_btl_pack(self):
         """FPS4 Pack Test: BTL_PACK.DAT"""
         manifest = os.path.join(paths.ARTIFACTS_DIR, ".manifest", "BTL_PACK.json")

@@ -170,7 +170,6 @@ def pack_from_manifest(output_name: str, manifest: str):
         mm.seek(ctypes.sizeof(fps4))
 
         for file_data in mf_data['files']:
-            if file_data.get('skippable', False): continue
 
             # Place filler for Start Pointer/Sector Size data for now
             if fps4.content_data.has_start_pointers: utils.expand_and_write(mm, bytes(4))
@@ -274,7 +273,6 @@ def pack_from_manifest(output_name: str, manifest: str):
         for i, file_data in enumerate(mf_data['files']):
             mm.seek(ctypes.sizeof(fps4.data) + (i * fps4.data.entry_size))
 
-            if file_data.get('skippable', False): continue
             does_file_exist: bool = os.path.isfile(file_data.get('path_on_disk', ''))
             if fps4.content_data.has_start_pointers:
                 if does_file_exist:
