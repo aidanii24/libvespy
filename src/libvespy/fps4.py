@@ -147,6 +147,11 @@ def pack_from_manifest(output_name: str, manifest: str):
         mf_data = json.load(f)
         f.close()
 
+    # Re-check file sizes of extracted files in case they are changed
+    for file in mf_data['files']:
+        if os.path.isfile(file.get('path_on_disk', '')):
+            file['file_size'] = os.path.getsize(file['path_on_disk'])
+
     fps4 = FPS4.from_manifest(mf_data)
 
     metadata_offset: int = fps4.content_data.get_metadata_offset()
