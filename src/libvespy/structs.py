@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Literal
 import ctypes
+import struct
 import math
 import mmap
 import sys
@@ -284,3 +285,19 @@ class FPS4(ctypes.Union):
 
     def validate(self):
         assert self.magic == b"FPS4", "Loaded file is not a valid FPS4 File!"
+
+class ScenarioHeader(ctypes.BigEndianStructure):
+    _fields_ = [
+        ("magic", ctypes.c_uint64),
+        ("file_size", ctypes.c_uint32),
+        ("unknown0", ctypes.c_uint32),
+        ("file_count", ctypes.c_uint32),
+        ("file_offset", ctypes.c_uint32),
+    ]
+
+class ScenarioEntry(ctypes.BigEndianStructure):
+    _fields_ = [
+        ("offset", ctypes.c_uint32),
+        ("file_size_compressed", ctypes.c_uint32),
+        ("file_size_uncompressed", ctypes.c_uint32),
+    ]
