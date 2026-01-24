@@ -288,12 +288,17 @@ class FPS4(ctypes.Union):
 
 class ScenarioHeader(ctypes.BigEndianStructure):
     _fields_ = [
-        ("magic", ctypes.c_uint64),
+        ("magic", ctypes.c_char * 8),
         ("file_size", ctypes.c_uint32),
         ("unknown0", ctypes.c_uint32),
         ("file_count", ctypes.c_uint32),
         ("file_offset", ctypes.c_uint32),
     ]
+
+    def __init__(self, file_count: int = 0, file_size: int = 0):
+        file_offset = file_count * 0x20 + 0x20
+
+        super().__init__("TO8SCEL\x00".encode(), file_size, 0x20, file_count, file_offset)
 
 class ScenarioEntry(ctypes.BigEndianStructure):
     _fields_ = [
