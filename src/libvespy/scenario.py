@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor
+from collections import namedtuple
 import hashlib
 import ctypes
 import mmap
@@ -8,7 +10,7 @@ from libvespy.utils import expand_and_write
 from libvespy.structs import ScenarioHeader, ScenarioEntry
 
 
-def extract(filename: str, out_dir: str):
+def extract(filename: str, out_dir: str, threads: int = 8):
     if not os.path.isfile(filename):
         print(f"{filename} was not found.")
 
@@ -18,6 +20,9 @@ def extract(filename: str, out_dir: str):
         except OSError as e:
             print(f"Failed to create {out_dir}: {e}")
             sys.exit(1)
+
+    File = namedtuple("File", ["filename", "data"])
+    file_data: list[File] = []
 
     with open(filename, "rb") as f:
         mm = mmap.mmap(f.fileno(), 0, prot=mmap.PROT_READ)
@@ -33,20 +38,26 @@ def extract(filename: str, out_dir: str):
             if not scenario_entry.file_size_compressed: continue
 
             mm.seek(scenario_entry.offset + header.file_offset)
-            data: bytes = mm.read(scenario_entry.file_size_compressed)
-
-            with open(os.path.join(out_dir, str(e)), "w+b") as ef:
-                ef.truncate(len(data))
-                em = mmap.mmap(ef.fileno(), 0, prot=mmap.PROT_WRITE)
-                em.resize(len(data))
-
-                em.write(data)
-
-                em.flush()
-                ef.close()
+            file_data.append(File(str(e), mm.read(scenario_entry.file_size_compressed)))
 
         mm.close()
         f.close()
+
+    def _extract_file(fd: File):
+        with open(os.path.join(out_dir, fd.filename), "w+b") as ef:
+            ef.truncate(len(fd.data))
+            em = mmap.mmap(ef.fileno(), 0, prot=mmap.PROT_WRITE)
+            em.resize(len(fd.data))
+
+            em.write(fd.data)
+
+            em.flush()
+            ef.close()
+
+    with ThreadPoolExecutor(max_workers=threads) as executor:
+        for file in file_data:
+            executor.submit(_extract_file, file)
+
 
 def pack(directory: str, output: str):
     if not os.path.isdir(directory):
