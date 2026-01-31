@@ -11,10 +11,16 @@ from libvespy.structs import FPS4FileData, FPS4
 
 def extract(filename: str, out_dir: str, manifest_dir: str = "",
             absolute_paths: bool = False, ignore_metadata: bool = False):
-    if not os.path.isfile(filename):
-        print(f"{filename} was not found.")
-        sys.exit(1)
+    """
+    Extract contents of FPS4 file.
 
+    :param filename: Path to FPS4 file.
+    :param out_dir: Path to where the extracted files will be saved.
+    :param manifest_dir: If specified, path to where the general data of the FPS4 file will be saved.
+    :param absolute_paths: If FPS4 manifests should use absolute paths
+    :param ignore_metadata: If FPS4 metadata should be ignored
+    :return: None
+    """
     byteorder: Literal['little', 'big'] = sys.byteorder
 
     manifest: dict = {}
@@ -25,7 +31,7 @@ def extract(filename: str, out_dir: str, manifest_dir: str = "",
         mm.seek(0)
         # Check Magic Number
         if mm.read(4) != 'FPS4'.encode('ascii'):
-            raise AssertionError("Provided file is not in FPS4 format.")
+            raise FPS4Error(f"[ERROR]\t{filename} is not a valid FPS4 file.")
 
         # Use the correct byteorder version of the Header structure
         mm.seek(0)
@@ -67,8 +73,12 @@ def extract(filename: str, out_dir: str, manifest_dir: str = "",
             file_manifest: dict = {k: v for k, v in file.__dict__.items() if v is not None}
 
             if not file.skippable:
-                assert file.address, "FPS4 Extraction Error: File does not contain file entry start pointer."
-                assert file_size is not None, "FPS4 Extraction Error: File does not contain file size data."
+                if not file.address:
+                    raise FPS4Error("[ERROR]\tFPS4 file may be malformed. "
+                                    "File does not contain file entry start pointer.")
+                if file_size is None:
+                    raise FPS4Error("[ERROR]\tFPS4 file may be malformed. "
+                                    "File does not contain file size data.")
 
                 file_address: int = file.address * fps4.file_location_multiplier
                 first_file_position = min(first_file_position, file_address)
@@ -133,19 +143,16 @@ def extract(filename: str, out_dir: str, manifest_dir: str = "",
             f.flush()
             f.close()
 
-def pack_from_manifest(output: str, manifest: str):
-    if not manifest:
-        print("A manifest file must be provided!")
-        sys.exit(1)
+def pack_from_manifest(output: str, manifest_file: str, manifest_data: dict):
+    if not manifest_file or not manifest_data:
+        raise FPS4Error(f"[ERROR]\tManifest data must be provided.")
 
-    if not os.path.isfile(manifest):
-        print("The provided path to the manifest is not valid!")
-        sys.exit(1)
-
-    mf_data: dict = {}
-    with open(manifest) as f:
-        mf_data = json.load(f)
-        f.close()
+    if manifest_file:
+        with open(manifest_file) as f:
+            mf_data = json.load(f)
+            f.close()
+    else:
+        mf_data = manifest_data
 
     # Re-check file sizes of extracted files in case they are changed
     for file in mf_data['files']:
@@ -326,3 +333,6 @@ def pack_from_manifest(output: str, manifest: str):
         mm.flush()
         mm.close()
         f.close()
+
+class FPS4Error(Exception):
+    """"""

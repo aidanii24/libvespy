@@ -4,7 +4,6 @@ import ctypes
 import mmap
 import lzma
 import zlib
-import sys
 import os
 
 from libvespy.structs import TLZCHeader
@@ -12,10 +11,14 @@ from libvespy.utils import format_lzma_filters
 from libvespy.res import Defaults
 
 def decompress(filename: str, output: str, comp_type: Literal['deflate', 'zlib', 'lzma', 'auto'] = 'auto'):
-    if not os.path.isfile(filename):
-        print(f"{filename} was not found.")
-        sys.exit(1)
+    """
+    Decompress a TLZC file.
 
+    :param filename: Path to TLZC file to decompress.
+    :param output: Path to where the decompressed file will be written.
+    :param comp_type: Compression type.
+    :return: None
+    """
     if not os.path.isdir(os.path.dirname(output)):
         os.makedirs(os.path.dirname(output))
 
@@ -51,7 +54,7 @@ def decompress(filename: str, output: str, comp_type: Literal['deflate', 'zlib',
         elif compression_type == 4:
             decompressed = lzma.decompress(f.read())
         else:
-            raise AssertionError(f"[Error]\tUnsupported compression type: Type {compression_type}")
+            raise TLZCError(f"[ERROR]\tUnsupported compression type: Type {compression_type}")
 
         f.close()
 
@@ -61,9 +64,15 @@ def decompress(filename: str, output: str, comp_type: Literal['deflate', 'zlib',
         f.close()
 
 def compress(filename: str, output: str, comp_type: Literal['deflate', 'zlib', 'lzma'] = 'zlib', nice_len: int = 64):
-    if not os.path.isfile(filename):
-        print(f"{filename} was not found.")
-        sys.exit(1)
+    """
+    Compress a file into TLZC format.
+
+    :param filename: Path to file to compress.
+    :param output: Path to where the compressed file will be written.
+    :param comp_type: Compression type.
+    :param nice_len: (LZMA Only) What should be considered a “nice length” for a match. This should be 273 or less.
+    :return: None
+    """
 
     if not os.path.isdir(os.path.dirname(output)):
         os.makedirs(os.path.dirname(output))
@@ -75,7 +84,7 @@ def compress(filename: str, output: str, comp_type: Literal['deflate', 'zlib', '
 
     file_size: int = os.path.getsize(filename)
     if file_size > 0xFFFFFFFF:
-        raise AssertionError(f"[Error]\tCompression of files over 4GB is not supported.")
+        raise TLZCError(f"[ERROR]\tCompression of files over 4GB is not supported.")
 
     compressed: bytes = bytes()
     with open(filename, "rb") as f:
@@ -97,7 +106,7 @@ def compress(filename: str, output: str, comp_type: Literal['deflate', 'zlib', '
             compressed = compress_as_lzma(f.read(), nice_len)
             pass
         else:
-            raise AssertionError(f"Unsupported compression type: Type {comp_type}")
+            raise TLZCError(f"[ERROR]\tUnsupported compression type: Type {comp_type}")
 
         f.close()
 
@@ -147,7 +156,7 @@ def decompress_zlib(data: bytes) -> bytes:
         zl: bytes = zlib.decompress(data)
         return zl
     except zlib.error:
-        raise AssertionError("zlib Decompression failed.")
+        raise TLZCError("[ERROR]\tzlib Decompression failed.")
 
 def decompress_deflate(data: bytes) -> bytes:
     zd = zlib.decompressobj(wbits=-zlib.MAX_WBITS)
@@ -156,14 +165,14 @@ def decompress_deflate(data: bytes) -> bytes:
         inflated += zd.flush()
         return inflated
     except zlib.error:
-        raise AssertionError("deflate Decompression failed.")
+        raise TLZCError("[ERROR]\tdeflate Decompression failed.")
 
 def compress_zlib(data: bytes) -> bytes:
     try:
         zl: bytes = zlib.compress(data, zlib.Z_BEST_COMPRESSION)
         return zl
     except zlib.error:
-        raise AssertionError("zlib Compression failed.")
+        raise TLZCError("[ERROR]\tzlib Compression failed.")
 
 def compress_deflate(data: bytes) -> bytes:
     zd = zlib.compressobj(wbits=-zlib.MAX_WBITS)
@@ -172,7 +181,7 @@ def compress_deflate(data: bytes) -> bytes:
         deflated += zd.flush()
         return deflated
     except zlib.error:
-        raise AssertionError("deflate Compression failed.")
+        raise TLZCError("[ERROR]\tdeflate Compression failed.")
 
 def compress_lzma(data: bytes, filters: Sequence[dict[str, Any]]) -> bytes:
     try:
@@ -182,4 +191,7 @@ def compress_lzma(data: bytes, filters: Sequence[dict[str, Any]]) -> bytes:
         return compressed
     except lzma.LZMAError:
         print(filters)
-        raise AssertionError("lzma Compression failed.")
+        raise TLZCError("[ERROR]\tlzma Compression failed.")
+
+class TLZCError(Exception):
+    """"""

@@ -11,15 +11,8 @@ from libvespy.structs import ScenarioHeader, ScenarioEntry
 
 
 def extract(filename: str, out_dir: str, threads: int = 8):
-    if not os.path.isfile(filename):
-        print(f"{filename} was not found.")
-
     if not os.path.isdir(out_dir):
-        try:
-            os.makedirs(out_dir)
-        except OSError as e:
-            print(f"Failed to create {out_dir}: {e}")
-            sys.exit(1)
+        os.makedirs(out_dir)
 
     File = namedtuple("File", ["filename", "data"])
     file_data: list[File] = []
@@ -60,10 +53,6 @@ def extract(filename: str, out_dir: str, threads: int = 8):
 
 
 def pack(directory: str, output: str):
-    if not os.path.isdir(directory):
-        print(f"{directory} was not found.")
-        sys.exit(1)
-
     # Get number of files for the archive, including ones skipped from extraction
     # Add one to the max, as the files start count at index 0
     extracted: list[str] = os.listdir(directory)
