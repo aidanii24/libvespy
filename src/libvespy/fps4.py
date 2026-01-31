@@ -9,7 +9,7 @@ from libvespy import utils
 from libvespy.structs import FPS4FileData, FPS4
 
 
-def extract(filename: str, out_dir: str, manifest_dir: str = "",
+def extract(filename: str, out_dir: str = "", manifest_dir: str = "",
             absolute_paths: bool = False, ignore_metadata: bool = False):
     """
     Extract contents of FPS4 file.
@@ -19,8 +19,13 @@ def extract(filename: str, out_dir: str, manifest_dir: str = "",
     :param manifest_dir: If specified, path to where the general data of the FPS4 file will be saved.
     :param absolute_paths: If FPS4 manifests should use absolute paths
     :param ignore_metadata: If FPS4 metadata should be ignored
-    :return: None
+    :return: Manifest data
     """
+
+    if not out_dir:
+        out_dir = filename
+        os.makedirs(out_dir)
+
     byteorder: Literal['little', 'big'] = sys.byteorder
 
     manifest: dict = {}
@@ -145,7 +150,16 @@ def extract(filename: str, out_dir: str, manifest_dir: str = "",
 
     return manifest
 
-def pack_from_manifest(output: str, manifest_file: str, manifest_data: dict):
+def pack_from_manifest(output: str = "", manifest_file: str = "", manifest_data: dict = ""):
+    """
+    Pack files into FPS4 format using data from a manifest.
+
+    :param output: Path to where the packed archive will be saved.
+    :param manifest_file: Path to file where archive manifest data is stored.
+    :param manifest_data: Manifest Data.
+    :return: None
+    """
+
     if not manifest_file or not manifest_data:
         raise FPS4Error(f"[ERROR]\tManifest data must be provided.")
 

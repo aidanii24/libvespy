@@ -10,7 +10,8 @@ from libvespy.structs import TLZCHeader
 from libvespy.utils import format_lzma_filters
 from libvespy.res import Defaults
 
-def decompress(filename: str, output: str, comp_type: Literal['deflate', 'zlib', 'lzma', 'auto'] = 'auto'):
+def decompress(filename: str, output: str = "",
+               comp_type: Literal['deflate', 'zlib', 'lzma', 'auto'] = 'auto'):
     """
     Decompress a TLZC file.
 
@@ -19,6 +20,10 @@ def decompress(filename: str, output: str, comp_type: Literal['deflate', 'zlib',
     :param comp_type: Compression type.
     :return: None
     """
+
+    if not output:
+        output = f"{filename}.dec"
+
     if not os.path.isdir(os.path.dirname(output)):
         os.makedirs(os.path.dirname(output))
 
@@ -63,7 +68,8 @@ def decompress(filename: str, output: str, comp_type: Literal['deflate', 'zlib',
         f.flush()
         f.close()
 
-def compress(filename: str, output: str, comp_type: Literal['deflate', 'zlib', 'lzma'] = 'zlib', nice_len: int = 64):
+def compress(filename: str, output: str = "",
+             comp_type: Literal['deflate', 'zlib', 'lzma'] = 'zlib', nice_len: int = 64):
     """
     Compress a file into TLZC format.
 
@@ -73,6 +79,13 @@ def compress(filename: str, output: str, comp_type: Literal['deflate', 'zlib', '
     :param nice_len: (LZMA Only) What should be considered a “nice length” for a match. This should be 273 or less.
     :return: None
     """
+
+    if not output:
+        base_file, extension = os.path.splitext(filename)
+        if extension == '.dec':
+            output = f"{base_file}.cmp"
+        else:
+            output = f"{filename}.cmp"
 
     if not os.path.isdir(os.path.dirname(output)):
         os.makedirs(os.path.dirname(output))

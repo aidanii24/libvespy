@@ -10,7 +10,19 @@ from libvespy.utils import expand_and_write
 from libvespy.structs import ScenarioHeader, ScenarioEntry
 
 
-def extract(filename: str, out_dir: str, threads: int = 8):
+def extract(filename: str, out_dir: str = "", threads: int = 8):
+    """
+    Extract Scenario file.
+
+    :param filename: Path to Scenario file.
+    :param out_dir: Path to where the extracted files will be saved.
+    :param threads: The maximum amount of threads that can be used for extraction.
+    :return: None
+    """
+    if not out_dir:
+        out_dir = filename
+        os.makedirs(out_dir)
+
     if not os.path.isdir(out_dir):
         os.makedirs(out_dir)
 
@@ -52,7 +64,15 @@ def extract(filename: str, out_dir: str, threads: int = 8):
             executor.submit(_extract_file, file)
 
 
-def pack(directory: str, output: str):
+def pack(directory: str, output: str = ""):
+    """
+    Pack scenario files.
+
+    :param directory: Path to directory of scenario files.
+    :param output: Path to where the archived scenario file will be saved.
+    :return: None
+    """
+
     # Get number of files for the archive, including ones skipped from extraction
     # Add one to the max, as the files start count at index 0
     extracted: list[str] = os.listdir(directory)
