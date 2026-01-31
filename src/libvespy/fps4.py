@@ -143,6 +143,8 @@ def extract(filename: str, out_dir: str, manifest_dir: str = "",
             f.flush()
             f.close()
 
+    return manifest
+
 def pack_from_manifest(output: str, manifest_file: str, manifest_data: dict):
     if not manifest_file or not manifest_data:
         raise FPS4Error(f"[ERROR]\tManifest data must be provided.")
