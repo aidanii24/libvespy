@@ -24,7 +24,8 @@ def extract(filename: str, out_dir: str = "", manifest_dir: str = "",
 
     if not out_dir:
         out_dir = f"{filename}.ext"
-        os.makedirs(out_dir)
+        if not os.path.isdir(out_dir):
+            os.makedirs(out_dir)
 
     byteorder: Literal['little', 'big'] = sys.byteorder
 
@@ -160,7 +161,7 @@ def pack_from_manifest(output: str, manifest_file: str = "", manifest_data: dict
     :return: None
     """
 
-    if not manifest_file or not manifest_data:
+    if not manifest_file and not manifest_data:
         raise FPS4Error(f"[ERROR]\tManifest data must be provided.")
 
     if manifest_file:
