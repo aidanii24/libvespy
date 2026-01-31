@@ -49,7 +49,7 @@ class TestTLZC(unittest.TestCase):
 
         output = os.path.join(paths.ARTIFACTS_DIR, "com_AHO_I00_02.DAT")
 
-        tlzc.compress(target, output, 2)
+        tlzc.compress(target, output)
 
         assert os.path.isfile(output)
 

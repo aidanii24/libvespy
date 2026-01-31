@@ -1,4 +1,5 @@
 from typing import Any, Literal, Sequence
+import warnings
 import ctypes
 import mmap
 import lzma
@@ -10,7 +11,7 @@ from libvespy.structs import TLZCHeader
 from libvespy.utils import format_lzma_filters
 from libvespy.res import Defaults
 
-def decompress(filename: str, output: str, comp_type: int = 0, comp_subtype: Literal['deflate', 'zlib'] = 'zlib'):
+def decompress(filename: str, output: str, comp_type: Literal['deflate', 'zlib', 'lzma', 'auto'] = 'auto'):
     if not os.path.isfile(filename):
         print(f"{filename} was not found.")
         sys.exit(1)
@@ -27,10 +28,23 @@ def decompress(filename: str, output: str, comp_type: int = 0, comp_subtype: Lit
         mm.close()
 
         decompressed: bytes = bytes()
-        compression_type = comp_type if comp_type else (header.type >> 8) & 0xff
+        compression_type: int = 2
+        compression_subtype = comp_type
+        if comp_type == 'auto':
+            compression_type = (header.type >> 8) & 0xff
+            if compression_type == 2:
+                compression_subtype = 'zlib'
+        elif comp_type == 'lzma':
+            compression_type = 4
+
+        # <!> lib is only tested with zlib for now
+        if comp_type == 'deflate' or compression_type == 4:
+            warnings.warn("[WARNING]\tSupport for Type 2 deflate and Type 4 lzma are only experimental."
+                          "Uncompressed output may get corrupted.")
+
         if compression_type == 2:
             data: bytes = f.read()[0x18:]
-            if comp_subtype == 'deflate':
+            if compression_subtype == 'deflate':
                 decompressed = decompress_deflate(data)
             else:
                 decompressed = decompress_zlib(data)
@@ -46,8 +60,7 @@ def decompress(filename: str, output: str, comp_type: int = 0, comp_subtype: Lit
         f.flush()
         f.close()
 
-def compress(filename: str, output: str, comp_type: int = 4, comp_subtype: Literal['deflate', 'zlib'] = 'zlib',
-             nice_len: int = 64):
+def compress(filename: str, output: str, comp_type: Literal['deflate', 'zlib', 'lzma'] = 'zlib', nice_len: int = 64):
     if not os.path.isfile(filename):
         print(f"{filename} was not found.")
         sys.exit(1)
@@ -55,61 +68,36 @@ def compress(filename: str, output: str, comp_type: int = 4, comp_subtype: Liter
     if not os.path.isdir(os.path.dirname(output)):
         os.makedirs(os.path.dirname(output))
 
+    # <!> lib is only tested with zlib for now
+    if comp_type in ('deflate', 'lzma'):
+        warnings.warn("[WARNING]\tSupport for Type 2 deflate and Type 4 lzma are only experimental."
+                      "Compression may fail or the compressed output may get corrupted.")
+
     file_size: int = os.path.getsize(filename)
     if file_size > 0xFFFFFFFF:
         raise AssertionError(f"[Error]\tCompression of files over 4GB is not supported.")
 
     compressed: bytes = bytes()
     with open(filename, "rb") as f:
-        if comp_type == 2:
-            if comp_subtype == 'deflate':
-                header = TLZCHeader(0x0201, file_size_compressed=file_size)
+        if comp_type in ('deflate', 'zlib'):
+            # Type 2 (deflate/zlib)
+            type_code: int = 0x0201
+            if comp_type == 'deflate':
+                header = TLZCHeader(type_code, file_size_compressed=file_size)
                 content = compress_deflate(f.read())
 
                 header.file_size_compressed = len(content)
                 header_as_bytes = bytearray(header)
             else:
                 content = compress_zlib(f.read())
-                header_as_bytes = bytearray(TLZCHeader(0x0201, ctypes.sizeof(TLZCHeader) + len(content),
-                                                       file_size))
-        elif comp_type == 4:
-            filters: Sequence[dict[str, Any]] = Defaults.LZMA_FILTERS
-            filters[0]['nice_len'] = nice_len
+                header_as_bytes = bytearray(TLZCHeader(type_code, ctypes.sizeof(TLZCHeader) + len(content), file_size))
 
-            header = TLZCHeader(0x0401, file_size_uncompressed=file_size)
-            filter_props: bytes = format_lzma_filters(filters)
-            data: bytes = f.read()
-            stream_count: int = (len(data) + 0xffff) >> 16
-
-            last_chunk_size: int = len(data)
-            data_sizes: list[int] = []
-            content: bytes = bytes()
-            for i in range(stream_count):
-                pre_size: int = len(content)
-
-                chunk_size: int = min(last_chunk_size, 0x10000)
-                content += compress_lzma(data[:chunk_size], Defaults.LZMA_FILTERS)
-
-                data_size: int = len(content) - pre_size
-                if data_size >= 0x10000:
-                    data_size = 0
-
-                last_chunk_size -= 0x10000
-                data_sizes.append(data_size)
-
-            # Remove lzma header
-            content = content[0x1E:]
-
-            sizes_as_bytes: bytes = bytes().join([s.to_bytes(2) for s in data_sizes])
-            header.file_size_compressed = ctypes.sizeof(header) + len(filter_props) + len(sizes_as_bytes) + len(content)
-
-            header_as_bytes = bytearray(header)
-            header_as_bytes += filter_props
-            header_as_bytes += sizes_as_bytes
+            compressed = header_as_bytes + content
+        elif comp_type == 'lzma':
+            compressed = compress_as_lzma(f.read(), nice_len)
+            pass
         else:
             raise AssertionError(f"Unsupported compression type: Type {comp_type}")
-
-        compressed = header_as_bytes + content
 
         f.close()
 
@@ -117,6 +105,42 @@ def compress(filename: str, output: str, comp_type: int = 4, comp_subtype: Liter
         f.write(compressed)
         f.flush()
         f.close()
+
+def compress_as_lzma(data: bytes, nice_len: int = 64) -> bytes:
+    filters: Sequence[dict[str, Any]] = Defaults.LZMA_FILTERS
+    filters[0]['nice_len'] = nice_len
+
+    header = TLZCHeader(0x0401, file_size_uncompressed=len(data))
+    filter_props: bytes = format_lzma_filters(filters)
+    stream_count: int = (len(data) + 0xffff) >> 16
+
+    last_chunk_size: int = len(data)
+    data_sizes: list[int] = []
+    content: bytes = bytes()
+    for i in range(stream_count):
+        pre_size: int = len(content)
+
+        chunk_size: int = min(last_chunk_size, 0x10000)
+        content += compress_lzma(data[:chunk_size], Defaults.LZMA_FILTERS)
+
+        data_size: int = len(content) - pre_size
+        if data_size >= 0x10000:
+            data_size = 0
+
+        last_chunk_size -= 0x10000
+        data_sizes.append(data_size)
+
+    # Remove lzma header
+    content = content[0x1E:]
+
+    sizes_as_bytes: bytes = bytes().join([s.to_bytes(2) for s in data_sizes])
+    header.file_size_compressed = ctypes.sizeof(header) + len(filter_props) + len(sizes_as_bytes) + len(content)
+
+    header_as_bytes = bytearray(header)
+    header_as_bytes += filter_props
+    header_as_bytes += sizes_as_bytes
+
+    return header_as_bytes + content
 
 def decompress_zlib(data: bytes) -> bytes:
     try:
