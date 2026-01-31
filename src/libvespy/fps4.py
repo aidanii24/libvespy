@@ -133,7 +133,7 @@ def extract(filename: str, out_dir: str, manifest_dir: str = "",
             f.flush()
             f.close()
 
-def pack_from_manifest(output_name: str, manifest: str):
+def pack_from_manifest(output: str, manifest: str):
     if not manifest:
         print("A manifest file must be provided!")
         sys.exit(1)
@@ -162,12 +162,12 @@ def pack_from_manifest(output_name: str, manifest: str):
     first_file_alignment: int = alignment if mf_data.get('first_file_alignment') is None \
         else mf_data['first_file_alignment']
 
-    if not os.path.isdir(os.path.dirname(output_name)):
-        os.makedirs(os.path.dirname(output_name))
+    if not os.path.isdir(os.path.dirname(output)):
+        os.makedirs(os.path.dirname(output))
 
-    with open(output_name, "w+b") as f:
+    with open(output, "w+b") as f:
         # Set initial size
-        if os.path.getsize(output_name) < 1: f.truncate(0x1C)
+        if os.path.getsize(output) < 1: f.truncate(0x1C)
 
         mm = mmap.mmap(f.fileno(), 0, prot=mmap.PROT_WRITE)
 

@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from typing import Literal
 import ctypes
-import struct
 import math
 import mmap
 import sys
@@ -62,6 +61,7 @@ class FPS4ContentData:
         if self.has_file_types: size += 0x4
 
         return size
+
 
 @dataclass
 class FPS4FileData:
@@ -160,6 +160,7 @@ class FPS4FileData:
 
         return os.path.dirname(path), os.path.basename(path) + "." + index_with_type
 
+
 class FPS4LittleEndian(ctypes.LittleEndianStructure):
     _pack_ = 1
     _fields_ = [
@@ -173,6 +174,7 @@ class FPS4LittleEndian(ctypes.LittleEndianStructure):
         ("archive_name_address", ctypes.c_uint32),
     ]
 
+
 class FPS4BigEndian(ctypes.BigEndianStructure):
     _pack_ = 1
     _fields_ = [
@@ -185,6 +187,7 @@ class FPS4BigEndian(ctypes.BigEndianStructure):
         ("unknown0", ctypes.c_uint32),
         ("archive_name_address", ctypes.c_uint32),
     ]
+
 
 class FPS4(ctypes.Union):
     _pack_ = 1
@@ -282,9 +285,9 @@ class FPS4(ctypes.Union):
 
         return fps4
 
-
     def validate(self):
         assert self.magic == b"FPS4", "Loaded file is not a valid FPS4 File!"
+
 
 class ScenarioHeader(ctypes.BigEndianStructure):
     _fields_ = [
@@ -300,9 +303,40 @@ class ScenarioHeader(ctypes.BigEndianStructure):
 
         super().__init__("TO8SCEL\x00".encode(), file_size, 0x20, file_count, file_offset)
 
+
 class ScenarioEntry(ctypes.BigEndianStructure):
     _fields_ = [
         ("offset", ctypes.c_uint32),
         ("file_size_compressed", ctypes.c_uint32),
         ("file_size_uncompressed", ctypes.c_uint32),
     ]
+
+
+class TLZCHeader(ctypes.Structure):
+    _pack_ = 1
+    _fields_ = [
+        ("magic", ctypes.c_char * 4),
+        ("type", ctypes.c_uint32),
+        ("file_size_compressed", ctypes.c_uint32),
+        ("file_size_uncompressed", ctypes.c_uint32),
+        ("unknown0", ctypes.c_uint32),
+        ("unknown1", ctypes.c_uint32),
+    ]
+
+    def __init__(self, comp_type: int = 0, file_size_compressed: int = 0, file_size_uncompressed: int = 0):
+        magic = "TLZC".encode("ascii")
+
+        super().__init__(magic, comp_type, file_size_compressed, file_size_uncompressed, 0, 0)
+
+    def validate(self, file_size: int):
+        self.validate_magic()
+        self.validate_size(file_size)
+
+    def validate_magic(self):
+        if self.magic != b'TLZC':
+            raise ValueError("TLZC magic value is not valid!")
+
+    def validate_size(self, file_size: int):
+        if file_size != self.file_size_compressed:
+            raise ValueError("File size of tlzc file does not match reported size from header!"
+                             f"\nExpected {self.file_size_uncompressed}b but got {file_size}b")

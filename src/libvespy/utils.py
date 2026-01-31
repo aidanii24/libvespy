@@ -1,3 +1,4 @@
+from typing import Any, Sequence
 import mmap
 
 
@@ -49,3 +50,18 @@ def align_number(base: int, alignment: int, offset: int = 0) -> int:
     diff: int = (base - offset) % alignment
 
     return base if diff == 0 else base + (alignment - diff)
+
+def format_lzma_filters(filters: Sequence[dict[str, Any]]) -> bytes:
+    dict_size = filters[0].get('dict_size', 0x400000) if filters else 0x400000
+    pb: int = filters[0].get('pb', 9) if filters else 9
+    lp: int = filters[0].get('lp', 0) if filters else 0
+    lc: int = filters[0].get('lc', 3) if filters else 3
+
+    props: bytes = bytes()
+    header: int = ((pb * 5 + lp) * 9 + lc)
+
+    props += header.to_bytes(1)
+    for i in range(4):
+        props += ((dict_size >> (8 * i)) & 0xff).to_bytes(1)
+
+    return props
