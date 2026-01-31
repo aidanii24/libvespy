@@ -23,7 +23,7 @@ def extract(filename: str, out_dir: str = "", manifest_dir: str = "",
     """
 
     if not out_dir:
-        out_dir = filename
+        out_dir = f"{filename}.ext"
         os.makedirs(out_dir)
 
     byteorder: Literal['little', 'big'] = sys.byteorder
@@ -150,7 +150,7 @@ def extract(filename: str, out_dir: str = "", manifest_dir: str = "",
 
     return manifest
 
-def pack_from_manifest(output: str = "", manifest_file: str = "", manifest_data: dict = ""):
+def pack_from_manifest(output: str, manifest_file: str = "", manifest_data: dict = ""):
     """
     Pack files into FPS4 format using data from a manifest.
 

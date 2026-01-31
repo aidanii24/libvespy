@@ -20,7 +20,7 @@ def extract(filename: str, out_dir: str = "", threads: int = 8):
     :return: None
     """
     if not out_dir:
-        out_dir = filename
+        out_dir = f"{filename}.ext"
         os.makedirs(out_dir)
 
     if not os.path.isdir(out_dir):
@@ -72,6 +72,9 @@ def pack(directory: str, output: str = ""):
     :param output: Path to where the archived scenario file will be saved.
     :return: None
     """
+
+    if not output:
+        output = f"{directory}.pck"
 
     # Get number of files for the archive, including ones skipped from extraction
     # Add one to the max, as the files start count at index 0
