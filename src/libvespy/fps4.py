@@ -320,8 +320,7 @@ def pack_from_manifest(output: str, manifest_file: str = "", manifest_data: dict
                     utils.expand_and_write(mm, bytes(4))
 
         # Handle Final Entry
-        valid_files: int = len([file for file in mf_data['files'] if not file.get('skippable', False)])
-        mm.seek(ctypes.sizeof(fps4.data) + (valid_files * fps4.data.entry_size))
+        mm.seek(ctypes.sizeof(fps4.data) + ((len(mf_data['files']) - 1 ) * fps4.data.entry_size))
         if file_terminator_address is None:
             utils.expand_and_write(mm, int(start_pointer / fps4.file_location_multiplier)
                                    .to_bytes(4, byteorder=fps4.byteorder))
