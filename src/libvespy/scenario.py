@@ -10,13 +10,13 @@ from libvespy.utils import expand_and_write
 from libvespy.structs import ScenarioHeader, ScenarioEntry
 
 
-def extract(filename: str, out_dir: str = "", threads: int = 8):
+def extract(filename: str, out_dir: str = "", max_threads: int = 8):
     """
     Extract Scenario file.
 
     :param filename: Path to Scenario file.
     :param out_dir: Path to where the extracted files will be saved.
-    :param threads: The maximum amount of threads that can be used for extraction.
+    :param max_threads: The maximum amount of threads that can be used for extraction.
     :return: None
     """
     if not out_dir:
@@ -59,10 +59,9 @@ def extract(filename: str, out_dir: str = "", threads: int = 8):
             em.flush()
             ef.close()
 
-    with ThreadPoolExecutor(max_workers=threads) as executor:
+    with ThreadPoolExecutor(max_workers=max_threads) as executor:
         for file in file_data:
             executor.submit(_extract_file, file)
-
 
 def pack(directory: str, output: str = ""):
     """

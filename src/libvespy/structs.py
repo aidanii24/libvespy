@@ -160,6 +160,29 @@ class FPS4FileData:
 
         return os.path.dirname(path), os.path.basename(path) + "." + index_with_type
 
+    def generate_manifest(self) -> dict:
+        manifest: dict = {}
+
+        if self.filename:
+            manifest['filename'] = self.filename
+
+        if self.file_extension:
+            manifest['file_extension'] = self.file_extension
+
+        if self.file_type:
+            manifest['file_type'] = self.file_type
+
+        if self.unknown_0x080 is not None:
+            manifest['unknown_0x080'] = self.unknown_0x080
+
+        if self.unknown_0x100 is not None:
+            manifest['unknown_0x100'] = self.unknown_0x100
+
+        if self.metadata:
+            manifest['metadata'] = self.metadata
+
+        return manifest
+
 
 class FPS4LittleEndian(ctypes.LittleEndianStructure):
     _pack_ = 1
@@ -251,14 +274,16 @@ class FPS4(ctypes.Union):
 
     def generate_base_manifest(self) -> dict:
         manifest = {
+            'byteorder': self.byteorder,
             'content_bitmask': self.data.content_bitmask,
             'unknown0': self.data.unknown0,
             'file_location_multiplier': self.file_location_multiplier,
-            'byteorder': self.byteorder,
-            'file_terminator_address': (self.files[-1].address
-                                        if len(self.files) > 0 and self.files[-1].address != self.file_size
-                                        else -1),
         }
+
+        if len(self.files) == 0:
+            manifest['file_terminator_address'] = None
+        elif self.files[-1].address != self.file_size:
+            manifest['file_terminator_address'] = self.files[-1].address
 
         if self.archive_name is not None:
             manifest["comment"] = self.archive_name

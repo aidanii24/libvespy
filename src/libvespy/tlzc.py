@@ -203,7 +203,6 @@ def compress_lzma(data: bytes, filters: Sequence[dict[str, Any]]) -> bytes:
         compressed += lz.flush()
         return compressed
     except lzma.LZMAError:
-        print(filters)
         raise TLZCError("[ERROR]\tlzma Compression failed.")
 
 class TLZCError(Exception):

@@ -9,15 +9,13 @@ from libvespy import utils
 from libvespy.structs import FPS4FileData, FPS4
 
 
-def extract(filename: str, out_dir: str = "", manifest_dir: str = "",
-            absolute_paths: bool = False, ignore_metadata: bool = False):
+def extract(filename: str, out_dir: str = "", manifest_dir: str = "", ignore_metadata: bool = False):
     """
     Extract contents of FPS4 file.
 
     :param filename: Path to FPS4 file.
     :param out_dir: Path to where the extracted files will be saved.
     :param manifest_dir: If specified, path to where the general data of the FPS4 file will be saved.
-    :param absolute_paths: If FPS4 manifests should use absolute paths
     :param ignore_metadata: If FPS4 metadata should be ignored
     :return: Manifest data
     """
@@ -76,7 +74,8 @@ def extract(filename: str, out_dir: str = "", manifest_dir: str = "",
             file_size: int | None = file.estimate_file_size(fps4.files)
 
             has_valid_file = True
-            file_manifest: dict = {k: v for k, v in file.__dict__.items() if v is not None}
+            file_manifest: dict = file.generate_manifest()
+            #{k: v for k, v in file.__dict__.items() if v is not None}
 
             if not file.skippable:
                 if not file.address:
@@ -101,7 +100,7 @@ def extract(filename: str, out_dir: str = "", manifest_dir: str = "",
                     base_out_dir = archived_filename
 
                 full_out_dir: str = os.path.join(out_dir, base_out_dir)
-                file_manifest['path_on_disk'] = os.path.abspath(full_out_dir) if absolute_paths else full_out_dir
+                file_manifest['path'] = os.path.abspath(full_out_dir)
 
                 mm.seek(file_address)
                 contents: bytes = mm.read(file_size)
@@ -129,7 +128,6 @@ def extract(filename: str, out_dir: str = "", manifest_dir: str = "",
     alignment: int = utils.get_alignment_from_lowest_unset_bit(estimated_alignment)
     manifest['alignment'] = alignment
 
-    manifest['first_file_alignment'] = None
     if first_file_position != 0xffffffffffffffff:
         first_file_alignment: int = utils.get_alignment_from_lowest_unset_bit(~first_file_position)
         if first_file_alignment > alignment:
@@ -173,8 +171,8 @@ def pack_from_manifest(output: str, manifest_file: str = "", manifest_data: dict
 
     # Re-check file sizes of extracted files in case they are changed
     for file in mf_data['files']:
-        if os.path.isfile(file.get('path_on_disk', '')):
-            file['file_size'] = os.path.getsize(file['path_on_disk'])
+        if os.path.isfile(file.get('path', '')):
+            file['file_size'] = os.path.getsize(file['path'])
 
     fps4 = FPS4.from_manifest(mf_data)
 
@@ -205,7 +203,8 @@ def pack_from_manifest(output: str, manifest_file: str = "", manifest_data: dict
             if fps4.content_data.has_sector_sizes: utils.expand_and_write(mm, bytes(4))
 
             if fps4.content_data.has_file_sizes:
-                utils.expand_and_write(mm, int.to_bytes(file_data.get('file_size'), length=4, byteorder=fps4.byteorder))
+                utils.expand_and_write(mm, int.to_bytes(file_data.get('file_size', 0),
+                                                        length=4, byteorder=fps4.byteorder))
             if fps4.content_data.has_filenames:
                 filename: str = file_data.get('filename', '')
                 if len(filename) > 0x1F:
@@ -296,13 +295,13 @@ def pack_from_manifest(output: str, manifest_file: str = "", manifest_data: dict
         start_addresses: list[int] = []
         for file_data in mf_data['files']:
             start_addresses.append(start_pointer)
-            start_pointer += utils.align_number(file_data['file_size'], alignment)
+            start_pointer += utils.align_number(file_data.get('file_size', 0), alignment)
 
         ## Handle Start Pointers and Sector Sizes
         for i, file_data in enumerate(mf_data['files']):
             mm.seek(ctypes.sizeof(fps4.data) + (i * fps4.data.entry_size))
 
-            does_file_exist: bool = os.path.isfile(file_data.get('path_on_disk', ''))
+            does_file_exist: bool = os.path.isfile(file_data.get('path', ''))
             if fps4.content_data.has_start_pointers:
                 if does_file_exist:
                     data = int(start_addresses[i] / fps4.file_location_multiplier)
@@ -334,8 +333,8 @@ def pack_from_manifest(output: str, manifest_file: str = "", manifest_data: dict
         # Write Files into archive
         for file_data in mf_data['files']:
             if file_data.get('skippable', False): continue
-            if not os.path.isfile(file_data.get('path_on_disk')): continue
-            with open(file_data['path_on_disk'], 'rb') as af:
+            if not os.path.isfile(file_data.get('path', '')): continue
+            with open(file_data['path'], 'rb') as af:
                 utils.expand_and_write(mm, af.read())
                 f.close()
 
