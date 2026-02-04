@@ -20,8 +20,13 @@ pip install pip@git+https://github.com/aidanii24/libvespy
 ```
 
 
-## Working from Source
+## Development
 Install the package in editable mode in order for imports to work correctly.
 ```commandline
 pip install -e .
 ```
+
+## Acknowledgements
+This library is based on the work of AdmiralCurtiss on HyoutaTools and would not have been possible without it.
+Thanks also to eArmada8 for their implementation of Type 4 TLZC Decompression in Python on 
+[vesperia_model_tool](https://github.com/eArmada8/vesperia_model_tool) and allowing its use in this project.

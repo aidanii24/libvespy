@@ -1,6 +1,7 @@
 from typing import Any, Literal, Sequence
 import warnings
 import ctypes
+import struct
 import mmap
 import lzma
 import zlib
@@ -53,11 +54,47 @@ def decompress(filename: str, output: str = "",
         if compression_type == 2:
             data: bytes = f.read()[0x18:]
             if compression_subtype == 'deflate':
-                decompressed = decompress_deflate(data)
+                zd = zlib.decompressobj(wbits=-zlib.MAX_WBITS)
+                try:
+                    decompressed = zd.decompress(data)
+                    decompressed += zd.flush()
+                except zlib.error:
+                    raise TLZCError("[ERROR]\tdeflate Decompression failed.")
             else:
-                decompressed = decompress_zlib(data)
+                try:
+                    decompressed = zlib.decompress(data)
+                except zlib.error:
+                    raise TLZCError("[ERROR]\tzlib Decompression failed.")
         elif compression_type == 4:
-            decompressed = lzma.decompress(f.read())
+            # Get LZMA Filters Data
+            f.seek(0x14)
+            mask, size = struct.unpack("<BI", f.read(5))
+            filters = [{
+                "id": lzma.FILTER_LZMA1,
+                "dict_size": size,
+                "lc": mask % 9,
+                "lp": (mask // 9) % 5,
+                "pb": (mask // 9) // 5,
+                "mode": lzma.MODE_NORMAL
+            }]
+
+            # Get Stream Data
+            stream_count: int = (header.file_size_compressed + 0xffff) >> 0x10
+            stream_sizes = list(struct.unpack(f"<{stream_count}H", f.read(2 * stream_count)))
+
+            # Decompress
+            decompressed: bytes = bytes()
+            for s in stream_sizes:
+                stream_len: int = min(header.file_size_compressed - len(decompressed), 0x10000)
+                if s:
+                    lz = lzma.LZMADecompressor(lzma.FORMAT_RAW, filters=filters)
+                    try:
+                        decompressed += lz.decompress(f.read(s), max_length=stream_len)
+                    except lzma.LZMAError:
+                        raise TLZCError("[ERROR]\tLZMA decompression failed")
+                else:
+                    decompressed += f.read(stream_len)
+
         else:
             raise TLZCError(f"[ERROR]\tUnsupported compression type: Type {compression_type}")
 
@@ -106,15 +143,24 @@ def compress(filename: str, output: str = "",
             type_code: int = 0x0201
             if comp_type == 'deflate':
                 header = TLZCHeader(type_code, file_size_compressed=file_size)
-                content = compress_deflate(f.read())
+
+                zd = zlib.compressobj(wbits=-zlib.MAX_WBITS)
+                try:
+                    content = zd.compress(f.read())
+                    content += zd.flush()
+                except zlib.error:
+                    raise TLZCError("[ERROR]\tdeflate Compression failed.")
 
                 header.file_size_compressed = len(content)
-                header_as_bytes = bytearray(header)
             else:
-                content = compress_zlib(f.read())
-                header_as_bytes = bytearray(TLZCHeader(type_code, ctypes.sizeof(TLZCHeader) + len(content), file_size))
+                try:
+                    content = zlib.compress(f.read(), zlib.Z_BEST_COMPRESSION)
+                except zlib.error:
+                    raise TLZCError("[ERROR]\tzlib Compression failed.")
 
-            compressed = header_as_bytes + content
+                header = TLZCHeader(type_code, ctypes.sizeof(TLZCHeader) + len(content), file_size)
+
+            compressed = bytearray(header) + content
         elif comp_type == 'lzma':
             compressed = compress_as_lzma(f.read(), nice_len)
             pass
@@ -163,38 +209,6 @@ def compress_as_lzma(data: bytes, nice_len: int = 64) -> bytes:
     header_as_bytes += sizes_as_bytes
 
     return header_as_bytes + content
-
-def decompress_zlib(data: bytes) -> bytes:
-    try:
-        zl: bytes = zlib.decompress(data)
-        return zl
-    except zlib.error:
-        raise TLZCError("[ERROR]\tzlib Decompression failed.")
-
-def decompress_deflate(data: bytes) -> bytes:
-    zd = zlib.decompressobj(wbits=-zlib.MAX_WBITS)
-    try:
-        inflated = zd.decompress(data)
-        inflated += zd.flush()
-        return inflated
-    except zlib.error:
-        raise TLZCError("[ERROR]\tdeflate Decompression failed.")
-
-def compress_zlib(data: bytes) -> bytes:
-    try:
-        zl: bytes = zlib.compress(data, zlib.Z_BEST_COMPRESSION)
-        return zl
-    except zlib.error:
-        raise TLZCError("[ERROR]\tzlib Compression failed.")
-
-def compress_deflate(data: bytes) -> bytes:
-    zd = zlib.compressobj(wbits=-zlib.MAX_WBITS)
-    try:
-        deflated = zd.compress(data)
-        deflated += zd.flush()
-        return deflated
-    except zlib.error:
-        raise TLZCError("[ERROR]\tdeflate Compression failed.")
 
 def compress_lzma(data: bytes, filters: Sequence[dict[str, Any]]) -> bytes:
     try:
