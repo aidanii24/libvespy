@@ -1,10 +1,10 @@
 # Development
 .idea/
 
-# Cache/Binaries
+# Cache
 __pycache__/
 
-# Artifacts
+# Build
 build/
 dist/
 *.egg-info

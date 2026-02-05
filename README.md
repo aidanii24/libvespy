@@ -10,13 +10,17 @@ A Python implementation of various tools used for handling various file formats 
   - **lzma** (Experimental)
 
 ## Installation
-Install from a local copy of the repository.
+### Remote (PyPI)
 ```commandline
-pip install path/to/libvespy
+pip install libvespy
 ```
-Installing directly from Github, is also possible.
+### Remote (Github)
 ```commandline
 pip install pip@git+https://github.com/aidanii24/libvespy
+```
+### Local Repository
+```commandline
+pip install path/to/libvespy
 ```
 
 
