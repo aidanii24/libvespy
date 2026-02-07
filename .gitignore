@@ -4,11 +4,14 @@
 # Cache
 __pycache__/
 
-# Build
-build/
-dist/
-*.egg-info
-
 # Testing
 tests/artifacts/
 tests/control/
+
+# Build
+build/
+dist/
+
+# Packaging
+*.egg-info
+.pypirc
